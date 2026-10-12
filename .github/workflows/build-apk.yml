@@ -1,4 +1,4 @@
-៘name: Build AI Video Creator APK
+name: Build AI Video Creator APK
 
 on:
   workflow_dispatch:
@@ -66,6 +66,3 @@ jobs:
         with:
           name: app-release-apk
           path: bin/*.apk
-
-
-
