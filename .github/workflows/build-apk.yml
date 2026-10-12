@@ -57,6 +57,15 @@ jobs:
           echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_HOME/licenses/android-sdk-license
           echo -e "\n24333f8a43b680d2304df263e18830495f16f5d4" >> $ANDROID_HOME/licenses/android-sdk-license
           echo -e "\nd56f5187479451eabf01fb78af6dfcb131a648b0" >> $ANDROID_HOME/licenses/android-sdk-license
+      - name: Diagnose Android SDK Manager
+        run: |
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+          echo "Checking SDK: $SDK"
+          find "$SDK" -type f -name sdkmanager -print
+          echo "Checking legacy path:"
+          ls -l "$SDK/tools/bin/sdkmanager" || true
+          echo "Checking command:"
+          command -v sdkmanager || true
 
       - name: Build debug APK
         env:
