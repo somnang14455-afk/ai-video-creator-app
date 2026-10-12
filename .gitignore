@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+bin/
+.gradle/
+local.properties
+*.jks
+*.keystore
+token.json
+credentials.json
