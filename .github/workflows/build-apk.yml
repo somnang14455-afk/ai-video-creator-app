@@ -14,7 +14,7 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Set up Python
@@ -26,7 +26,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            python3-pip \
             python3-dev \
             build-essential \
             git \
@@ -43,93 +42,76 @@ jobs:
             libssl-dev \
             libltdl-dev
 
-      - name: Install Buildozer and Cython
+      - name: Install Buildozer
         run: |
-          pip install --upgrade pip
-          pip install --upgrade cython==0.29.36 buildozer pvx
+          python -m pip install --upgrade pip
+          python -m pip install cython==0.29.36 buildozer
 
-      - name: Accept Android SDK Licenses
-        run: |
-          mkdir -p ~/.android
-          echo "### License" > ~/.android/repositories.cfg
-          ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-          mkdir -p $ANDROID_HOME/licenses
-          echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_HOME/licenses/android-sdk-license
-          echo -e "\n24333f8a43b680d2304df263e18830495f16f5d4" >> $ANDROID_HOME/licenses/android-sdk-license
-          echo -e "\nd56f5187479451eabf01fb78af6dfcb131a648b0" >> $ANDROID_HOME/licenses/android-sdk-license
-      - name: Diagnose Android SDK Manager
-        run: |
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-          echo "Checking SDK: $SDK"
-          find "$SDK" -type f -name sdkmanager -print
-          echo "Checking legacy path:"
-          ls -l "$SDK/tools/bin/sdkmanager" || true
-          echo "Checking command:"
-          command -v sdkmanager || true
-       
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Fix Buildozer SDK Manager Path
+      - name: Configure Android SDK for Buildozer
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-          mkdir -p "$SDK"
+          REAL_SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          REAL_SDKMANAGER="$(find "$REAL_SDK" \
+            -type f -name sdkmanager -print -quit)"
 
-          # Find sdkmanager provided by the setup action
-          FOUND="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}" \
-            -type f -name sdkmanager 2>/dev/null | head -n 1)"
-
-          if [ -z "$FOUND" ]; then
-            echo "ERROR: sdkmanager was not installed"
+          if [ -z "$REAL_SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager was not found."
+            find "$REAL_SDK" -type f -name sdkmanager -print || true
             exit 1
           fi
 
-          echo "Found sdkmanager: $FOUND"
+          LEGACY_SDK="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$LEGACY_SDK/tools/bin"
 
-          mkdir -p "$SDK/tools/bin"
-          ln -sf "$FOUND" "$SDK/tools/bin/sdkmanager"
+          for item in platforms platform-tools build-tools cmdline-tools licenses; do
+            if [ -e "$REAL_SDK/$item" ] && \
+               [ ! -e "$LEGACY_SDK/$item" ] && \
+               [ ! -L "$LEGACY_SDK/$item" ]; then
+              ln -s "$REAL_SDK/$item" "$LEGACY_SDK/$item"
+            fi
+          done
 
-          "$SDK/tools/bin/sdkmanager" --version
-
-      
-      
-      - name: Fix Buildozer SDK Manager
-        run: |
-          set -eu
-
-          SDK="$ANDROID_HOME"
-          REAL_SDKMANAGER="$SDK/cmdline-tools/22.0/bin/sdkmanager"
-
-          if [ ! -f "$REAL_SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found at $REAL_SDKMANAGER"
-            find "$SDK/cmdline-tools" -type f -name sdkmanager -print
-            exit 1
-          fi
-
-          mkdir -p "$SDK/tools/bin"
-
-          cat > "$SDK/tools/bin/sdkmanager" <<'EOF'
+          cat > "$LEGACY_SDK/tools/bin/sdkmanager" <<EOF
           #!/usr/bin/env bash
-          exec "$ANDROID_HOME/cmdline-tools/22.0/bin/sdkmanager" "$@"
+          exec "$REAL_SDKMANAGER" "\$@"
           EOF
 
-          chmod +x "$SDK/tools/bin/sdkmanager"
+          chmod +x "$LEGACY_SDK/tools/bin/sdkmanager"
 
-          "$SDK/tools/bin/sdkmanager" --version
-          
+          echo "ANDROID_HOME=$REAL_SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$REAL_SDK" >> "$GITHUB_ENV"
+          echo "ANDROIDSDK=$LEGACY_SDK" >> "$GITHUB_ENV"
+
+          mkdir -p "$HOME/.android"
+          touch "$HOME/.android/repositories.cfg"
+
+          yes | "$REAL_SDKMANAGER" --licenses || true
+
+          echo "Android SDK: $REAL_SDK"
+          echo "Buildozer SDK: $LEGACY_SDK"
+          "$LEGACY_SDK/tools/bin/sdkmanager" --version
+
+      - name: Verify Android SDK
+        run: |
+          set -eu
+          test -x "$ANDROIDSDK/tools/bin/sdkmanager"
+          test -x "$ANDROIDSDK/platform-tools/adb"
+          "$ANDROIDSDK/tools/bin/sdkmanager" --version
+          echo "Android SDK verification passed."
+
       - name: Build debug APK
-        env:
-          USE_SDK_WRAPPER: "1"
         run: |
           buildozer -v android debug
 
       - name: Upload APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: bin/*.apk
-          android.sdk_path = /usr/local/lib/android/sdk
-
-
+          if-no-files-found: error
