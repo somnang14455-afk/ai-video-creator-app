@@ -93,7 +93,7 @@ jobs:
 
           "$SDK/tools/bin/sdkmanager" --version
 
-      - name: Build debug APK
+      
       
       - name: Build debug APK
         env:
