@@ -66,7 +66,35 @@ jobs:
           ls -l "$SDK/tools/bin/sdkmanager" || true
           echo "Checking command:"
           command -v sdkmanager || true
+       
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
 
+      - name: Fix Buildozer SDK Manager Path
+        run: |
+          set -eu
+
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDK"
+
+          # Find sdkmanager provided by the setup action
+          FOUND="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}" \
+            -type f -name sdkmanager 2>/dev/null | head -n 1)"
+
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: sdkmanager was not installed"
+            exit 1
+          fi
+
+          echo "Found sdkmanager: $FOUND"
+
+          mkdir -p "$SDK/tools/bin"
+          ln -sf "$FOUND" "$SDK/tools/bin/sdkmanager"
+
+          "$SDK/tools/bin/sdkmanager" --version
+
+      - name: Build debug APK
+      
       - name: Build debug APK
         env:
           USE_SDK_WRAPPER: "1"
