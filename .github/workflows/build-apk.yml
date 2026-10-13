@@ -95,6 +95,30 @@ jobs:
 
       
       
+      - name: Fix Buildozer SDK Manager
+        run: |
+          set -eu
+
+          SDK="$ANDROID_HOME"
+          REAL_SDKMANAGER="$SDK/cmdline-tools/22.0/bin/sdkmanager"
+
+          if [ ! -f "$REAL_SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found at $REAL_SDKMANAGER"
+            find "$SDK/cmdline-tools" -type f -name sdkmanager -print
+            exit 1
+          fi
+
+          mkdir -p "$SDK/tools/bin"
+
+          cat > "$SDK/tools/bin/sdkmanager" <<'EOF'
+          #!/usr/bin/env bash
+          exec "$ANDROID_HOME/cmdline-tools/22.0/bin/sdkmanager" "$@"
+          EOF
+
+          chmod +x "$SDK/tools/bin/sdkmanager"
+
+          "$SDK/tools/bin/sdkmanager" --version
+          
       - name: Build debug APK
         env:
           USE_SDK_WRAPPER: "1"
@@ -106,5 +130,6 @@ jobs:
         with:
           name: app-debug-apk
           path: bin/*.apk
+          android.sdk_path = /usr/local/lib/android/sdk
 
 
